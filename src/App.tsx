@@ -108,13 +108,18 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
   }
   snapCenters(0, side * .55)
   snapCenters(1, height * .70)
-  return values.map((value) => ({
-    item: value.item,
-    x: Math.min(1 - side / 2, Math.max(side / 2, value.center[0])),
-    y: Math.min(1 - height / 2, Math.max(height / 2, value.center[1])),
-    width: side,
-    height,
-  }))
+  return values.map((value) => {
+    const vertical = value.item.o === 'v'
+    const width = vertical ? height / ar : side
+    const boxHeight = vertical ? side * ar : height
+    return {
+      item: value.item,
+      x: Math.min(1 - width / 2, Math.max(width / 2, value.center[0])),
+      y: Math.min(1 - boxHeight / 2, Math.max(boxHeight / 2, value.center[1])),
+      width,
+      height: boxHeight,
+    }
+  })
 }
 
 function regionPath(points?: [number, number][]) {

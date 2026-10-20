@@ -33,6 +33,7 @@ export interface LocationEntry {
   no: string
   box?: [number, number][]
   box_clipped?: boolean
+  o?: 'h' | 'v'
 }
 
 export interface WebData {
