@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, DoorOpen, LocateFixed, LogOut, MapPin, Search, Warehouse } from 'lucide-react'
 import { findLocation, loadStoreData } from './data'
 import type { GridGroup, LocationEntry, SpaceObject, WebData } from './types'
@@ -127,5 +127,19 @@ function Finder({ data, onExit }: { data: WebData; onExit: () => void }) {
 
 export default function App() {
   const [data, setData] = useState<WebData | null>(null)
+  const [directLoading, setDirectLoading] = useState(false)
+
+  useEffect(() => {
+    const storeCode = new URLSearchParams(window.location.search).get('store')?.trim() || ''
+    if (!/^\d{4}$/.test(storeCode)) return
+    setDirectLoading(true)
+    loadStoreData(storeCode)
+      .then(setData)
+      .catch(() => setDirectLoading(false))
+  }, [])
+
+  if (directLoading && !data) {
+    return <main className="access-page"><section className="access-panel"><div className="access-card"><Brand /><p className="help">매장 지도를 불러오는 중입니다…</p></div></section></main>
+  }
   return data ? <Finder data={data} onExit={() => setData(null)} /> : <StoreAccess onAccess={setData} />
 }
