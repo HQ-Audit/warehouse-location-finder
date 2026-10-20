@@ -163,7 +163,7 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
   </div>
 }
 
-function Finder({ data, onExit }: { data: WebData; onExit: () => void }) {
+function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () => void; showStoreChange: boolean }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<LocationEntry | null>(null)
   const [error, setError] = useState('')
@@ -180,7 +180,7 @@ function Finder({ data, onExit }: { data: WebData; onExit: () => void }) {
   }
   const title = selected ? `${selected.w.toUpperCase() === 'B' ? '창고' : selected.w} ${floors.size > 1 && selected.f ? `${selected.f}층 ` : ''}${selected.no}` : ''
   return <main className="finder-page">
-    <header><Brand /><button onClick={onExit}><LogOut size={17} />매장 변경</button></header>
+    <header><Brand />{showStoreChange && <button onClick={onExit}><LogOut size={17} />매장 변경</button>}</header>
     <div className="finder-content">
       <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>{storeLabel} · 로케이션 번호를 입력하세요.</p></section>
       <form className="location-search" onSubmit={submit}>
@@ -201,18 +201,18 @@ function Finder({ data, onExit }: { data: WebData; onExit: () => void }) {
 export default function App() {
   const [data, setData] = useState<WebData | null>(null)
   const [directLoading, setDirectLoading] = useState(false)
+  const directStoreCode = useMemo(() => new URLSearchParams(window.location.search).get('store')?.trim() || '', [])
 
   useEffect(() => {
-    const storeCode = new URLSearchParams(window.location.search).get('store')?.trim() || ''
-    if (!/^\d{4}$/.test(storeCode)) return
+    if (!/^\d{4}$/.test(directStoreCode)) return
     setDirectLoading(true)
-    loadStoreData(storeCode)
+    loadStoreData(directStoreCode)
       .then(setData)
       .catch(() => setDirectLoading(false))
-  }, [])
+  }, [directStoreCode])
 
   if (directLoading && !data) {
     return <main className="access-page"><section className="access-panel"><div className="access-card"><Brand /><p className="help">매장 지도를 불러오는 중입니다…</p></div></section></main>
   }
-  return data ? <Finder data={data} onExit={() => setData(null)} /> : <StoreAccess onAccess={setData} />
+  return data ? <Finder data={data} onExit={() => setData(null)} showStoreChange={!/^\d{4}$/.test(directStoreCode)} /> : <StoreAccess onAccess={setData} />
 }
