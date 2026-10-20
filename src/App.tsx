@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, DoorOpen, LocateFixed, LogOut, MapPin, Search, Warehouse } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, LocateFixed, LogOut, MapPin, Search, Warehouse } from 'lucide-react'
 import { findLocation, loadStoreData } from './data'
 import type { GridGroup, LocationEntry, SpaceObject, WebData } from './types'
 
@@ -39,7 +39,7 @@ function StoreAccess({ onAccess }: { onAccess: (data: WebData) => void }) {
         <label>매장 코드<div className="input-wrap"><Warehouse size={19} /><input autoFocus inputMode="numeric" pattern="[0-9]*" maxLength={4} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} placeholder="숫자 4자리" /></div></label>
         {error && <p className="form-error">{error}</p>}
         <button className="primary-button" disabled={loading}>{loading ? '확인 중…' : '접속하기'}<ArrowRight size={18} /></button>
-        <p className="privacy-note">매장명과 원본 도면은 웹 데이터에 저장하지 않습니다.</p>
+        <p className="privacy-note">원본 도면 이미지는 웹 데이터에 저장하지 않습니다.</p>
       </form>
     </section>
   </main>
@@ -67,6 +67,61 @@ function gridBounds(group: GridGroup): Bounds {
   return { minX, minY, maxX, maxY, cols: maxX - minX + 1, rows: maxY - minY + 1 }
 }
 
+type AlignedBox = { item: LocationEntry; x: number; y: number; width: number; height: number }
+
+function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): AlignedBox[] {
+  const ar = Math.max(.1, Number(aspectRatio || 1))
+  const values = items.flatMap((item) => {
+    if (!item.box || item.box.length < 3) return []
+    const points = item.box.map(([x, y]) => [Number(x), Number(y)] as [number, number])
+    const center: [number, number] = [
+      points.reduce((sum, point) => sum + point[0], 0) / points.length,
+      points.reduce((sum, point) => sum + point[1], 0) / points.length,
+    ]
+    let twiceArea = 0
+    points.forEach((point, index) => {
+      const next = points[(index + 1) % points.length]
+      twiceArea += point[0] * next[1] - next[0] * point[1]
+    })
+    return [{ item, center, side: Math.sqrt(Math.abs(twiceArea) / 2 / ar) }]
+  })
+  const sides = values.map((value) => value.side).filter((value) => Number.isFinite(value) && value > .001).sort((a, b) => a - b)
+  const median = sides.length ? sides[Math.floor(sides.length / 2)] : .018
+  const side = Math.max(.013, median * 1.45)
+  const height = Math.max(.007, median * .78) * ar
+  const snapCenters = (axis: 0 | 1, tolerance: number) => {
+    const ordered = [...values].sort((a, b) => a.center[axis] - b.center[axis])
+    let cluster: typeof values = []
+    const finish = () => {
+      if (cluster.length >= 2) {
+        const mean = cluster.reduce((sum, value) => sum + value.center[axis], 0) / cluster.length
+        cluster.forEach((value) => { value.center[axis] = mean })
+      }
+      cluster = []
+    }
+    ordered.forEach((value) => {
+      const mean = cluster.length ? cluster.reduce((sum, item) => sum + item.center[axis], 0) / cluster.length : value.center[axis]
+      if (!cluster.length || Math.abs(value.center[axis] - mean) <= tolerance) cluster.push(value)
+      else { finish(); cluster = [value] }
+    })
+    finish()
+  }
+  snapCenters(0, side * .55)
+  snapCenters(1, height * .70)
+  return values.map((value) => ({
+    item: value.item,
+    x: Math.min(1 - side / 2, Math.max(side / 2, value.center[0])),
+    y: Math.min(1 - height / 2, Math.max(height / 2, value.center[1])),
+    width: side,
+    height,
+  }))
+}
+
+function regionPath(points?: [number, number][]) {
+  if (!points || points.length < 3) return ''
+  return `M ${points.map(([x, y]) => `${Number(x) * 1000} ${Number(y) * 1000}`).join(' L ')} Z`
+}
+
 function ObjectBadge({ object, bounds }: { object: SpaceObject; bounds: Bounds }) {
   const code = object.c
   const direction = code.startsWith('ENT_') ? code.slice(4) : ''
@@ -76,18 +131,28 @@ function ObjectBadge({ object, bounds }: { object: SpaceObject; bounds: Bounds }
   return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code}</span>
 }
 
-function GridMap({ group, selected }: { group: GridGroup; selected: LocationEntry }) {
+function GridMap({ group, selected, locations }: { group: GridGroup; selected: LocationEntry | null; locations: LocationEntry[] }) {
   const bounds = useMemo(() => gridBounds(group), [group])
   const passages = useMemo(() => new Set(group.passages.map(([x, y]) => `${x},${y}`)), [group])
-  return <div className="grid-stage" style={{ aspectRatio: `${bounds.cols} / ${bounds.rows}` }}>
-    <div className="cognitive-grid" style={{ gridTemplateColumns: `repeat(${bounds.cols}, 1fr)`, gridTemplateRows: `repeat(${bounds.rows}, 1fr)` }}>
+  const locationBoxes = useMemo(() => locations.filter((item) => item.g === group.id && (!selected || item.f === selected.f) && item.box && item.box.length >= 3), [group.id, locations, selected])
+  const alignedBoxes = useMemo(() => alignedLocationBoxes(locationBoxes, Number(group.ar || 1)), [group.ar, locationBoxes])
+  const fullBounds: Bounds = { minX: 1, minY: 1, maxX: group.cols || group.n, maxY: group.rows || group.n, cols: group.cols || group.n, rows: group.rows || group.n }
+  const outline = regionPath(group.outline || [[0, 0], [1, 0], [1, 1], [0, 1]])
+  const holes = (group.voids || []).map(regionPath).join(' ')
+  return <div className="grid-stage" style={{ aspectRatio: locationBoxes.length ? String(Number(group.ar || 1)) : `${bounds.cols} / ${bounds.rows}` }}>
+    <div className="cognitive-grid" style={{ display: locationBoxes.length ? 'none' : 'grid', gridTemplateColumns: `repeat(${bounds.cols}, 1fr)`, gridTemplateRows: `repeat(${bounds.rows}, 1fr)` }}>
       {group.cells.map(([x, y]) => {
         if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY || passages.has(`${x},${y}`)) return null
-        const active = selected.x === x && selected.y === y
+        const active = selected?.x === x && selected?.y === y
         return <span key={`${x}-${y}`} className={`grid-cell ${active ? 'active' : ''}`} style={{ gridColumn: x - bounds.minX + 1, gridRow: y - bounds.minY + 1 }} aria-label={active ? `선택 위치 ${x}, ${y}` : undefined}>{active && <MapPin />}</span>
       })}
     </div>
-    {group.objects.map((object, index) => <ObjectBadge key={`${object.c}-${object.x}-${object.y}-${index}`} object={object} bounds={bounds} />)}
+    {locationBoxes.length > 0 && <svg className="box-map" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="실제 로케이션 박스 지도">
+      {alignedBoxes.map((value) => <rect key={value.item.id} x={(value.x - value.width / 2) * 1000} y={(value.y - value.height / 2) * 1000} width={value.width * 1000} height={value.height * 1000} rx="3" className={`location-box ${value.item.id === selected?.id ? 'active' : ''}`} />)}
+    </svg>}
+    <svg className="shape-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><path d={`${outline} ${holes}`} fillRule="evenodd" /></svg>
+    {group.objects.map((object, index) => <ObjectBadge key={`${object.c}-${object.x}-${object.y}-${index}`} object={object} bounds={locationBoxes.length ? fullBounds : bounds} />)}
+    {alignedBoxes.filter((value) => value.item.id === selected?.id).map((value) => <span key={`pin-${value.item.id}`} className="location-pin" style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }} aria-label={`찾는 위치 ${value.item.no}`}>📍</span>)}
   </div>
 }
 
@@ -97,7 +162,9 @@ function Finder({ data, onExit }: { data: WebData; onExit: () => void }) {
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const floors = useMemo(() => new Set(data.locations.map((location) => location.f).filter(Boolean)), [data])
-  const group = selected ? data.groups.find((item) => item.id === selected.g) : undefined
+  const storeLabel = data.store_name?.trim() || data.store
+  const shortSearch = floors.size <= 1 || Boolean(data.floor_selector)
+  const group = selected ? data.groups.find((item) => item.id === selected.g) : data.groups[0]
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
     const found = findLocation(data, query)
@@ -108,18 +175,17 @@ function Finder({ data, onExit }: { data: WebData; onExit: () => void }) {
   return <main className="finder-page">
     <header><Brand /><button onClick={onExit}><LogOut size={17} />매장 변경</button></header>
     <div className="finder-content">
-      <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>매장 {data.store} · 로케이션 번호를 입력하세요.</p></section>
+      <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>{storeLabel} · 로케이션 번호를 입력하세요.</p></section>
       <form className="location-search" onSubmit={submit}>
-        <div className="search-input"><Search /><input ref={inputRef} autoFocus inputMode="numeric" value={query} onChange={(event) => setQuery(event.target.value.replace(/[^0-9A-Za-z가-힣-]/g, ''))} placeholder="예: 1128" /></div>
+        <div className="search-input"><Search /><input ref={inputRef} autoFocus inputMode="numeric" value={query} onChange={(event) => setQuery(event.target.value.replace(/[^0-9A-Za-z가-힣-]/g, ''))} placeholder={shortSearch ? '예: 128' : '예: 1128'} /></div>
         <button className="primary-button">위치 보기</button>
       </form>
       {error && <p className="form-error result-error">{error}</p>}
-      {!selected && !error && <section className="empty-state"><span><DoorOpen /></span><h2>찾을 로케이션을 입력하세요</h2><p>예: 창고-1층-128은 <strong>1128</strong>로 조회할 수 있습니다.</p></section>}
-      {selected && group && <section className="result-card">
-        <div className="result-title"><span><Check /></span><div><p>검색 결과</p><h2>{title}</h2><small>{group.name} · Grid ({selected.x}, {selected.y})</small></div></div>
-        <GridMap group={group} selected={selected} />
-        <div className="result-guide"><LocateFixed /><p><strong>표시된 위치부터 찾아보세요.</strong><span>그리드는 실제 거리가 아닌 방향 인지를 위한 안내입니다.</span></p></div>
-        <button className="secondary-button" onClick={() => { setQuery(''); setSelected(null); setError(''); setTimeout(() => inputRef.current?.focus(), 0) }}><ArrowLeft />다른 로케이션 찾기</button>
+      {group && <section className={`result-card ${selected ? '' : 'overview'}`}>
+        <div className="result-title"><span><Check /></span><div><p>{selected ? '검색 결과' : '창고 배치'}</p><h2>{selected ? title : '전체 배치'}</h2><small>{selected?.box ? `${group.name} · 실제 로케이션 박스` : selected ? `${group.name} · Grid (${selected.x}, ${selected.y})` : `${group.name} · 로케이션을 검색하면 핀으로 표시됩니다.`}</small></div></div>
+        <GridMap group={group} selected={selected} locations={data.locations} />
+        <div className="result-guide"><LocateFixed /><p><strong>{selected ? '표시된 위치부터 찾아보세요.' : '전체 배치를 먼저 확인하세요.'}</strong><span>{selected?.box ? '빨간 핀과 노란 칸이 찾는 로케이션입니다.' : selected ? '빨간 핀과 강조된 칸이 찾는 위치입니다.' : shortSearch ? '위 검색창에 로케이션 번호를 입력하세요. 예: 128' : '위 검색창에 층과 로케이션 번호를 입력하세요. 예: 1128'}</span></p></div>
+        {selected && <button className="secondary-button" onClick={() => { setQuery(''); setSelected(null); setError(''); setTimeout(() => inputRef.current?.focus(), 0) }}><ArrowLeft />다른 로케이션 찾기</button>}
       </section>}
     </div>
   </main>

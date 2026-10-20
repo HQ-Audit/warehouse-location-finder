@@ -5,15 +5,21 @@ export interface SpaceObject {
   s?: number
   dx?: number
   dy?: number
+  r?: number
 }
 
 export interface GridGroup {
   id: string
   name: string
   n: number
+  cols?: number
+  rows?: number
+  ar?: number
   cells: [number, number][]
   passages: [number, number][]
   objects: SpaceObject[]
+  outline?: [number, number][]
+  voids?: [number, number][][]
 }
 
 export interface LocationEntry {
@@ -25,12 +31,17 @@ export interface LocationEntry {
   w: string
   f: string
   no: string
+  box?: [number, number][]
+  box_clipped?: boolean
 }
 
 export interface WebData {
   format: 'warehouse-location-web'
   v: number
   store: string
+  store_name?: string
+  default_floor?: string
+  floor_selector?: boolean
   generated: string
   groups: GridGroup[]
   locations: LocationEntry[]
