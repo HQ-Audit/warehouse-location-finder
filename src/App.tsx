@@ -87,8 +87,10 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
   })
   const sides = values.map((value) => value.side).filter((value) => Number.isFinite(value) && value > .001).sort((a, b) => a - b)
   const median = sides.length ? sides[Math.floor(sides.length / 2)] : .018
-  const side = Math.max(.013, median * 1.45)
-  const height = Math.max(.007, median * .78) * ar
+  const snapSide = Math.max(.013, median * 1.45)
+  const snapHeight = Math.max(.007, median * .78) * ar
+  const side = Math.max(.018, median * 1.8)
+  const height = Math.max(.010, median * .98) * ar
   const snapCenters = (axis: 0 | 1, tolerance: number) => {
     const ordered = [...values].sort((a, b) => a.center[axis] - b.center[axis])
     let cluster: typeof values = []
@@ -106,8 +108,8 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
     })
     finish()
   }
-  snapCenters(0, side * .55)
-  snapCenters(1, height * .70)
+  snapCenters(0, snapSide * .55)
+  snapCenters(1, snapHeight * .70)
   return values.map((value) => {
     const vertical = value.item.o === 'v'
     const width = vertical ? height / ar : side
