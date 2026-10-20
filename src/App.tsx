@@ -178,21 +178,27 @@ function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () =
     if (!found) { setSelected(null); setError('해당 로케이션을 찾지 못했습니다. 번호를 다시 확인해 주세요.'); return }
     setSelected(found); setError('')
   }
+  const resetSearch = () => {
+    setQuery(''); setSelected(null); setError('')
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
   const title = selected ? `${selected.w.toUpperCase() === 'B' ? '창고' : selected.w} ${floors.size > 1 && selected.f ? `${selected.f}층 ` : ''}${selected.no}` : ''
   return <main className="finder-page">
     <header><Brand />{showStoreChange && <button onClick={onExit}><LogOut size={17} />매장 변경</button>}</header>
     <div className="finder-content">
       <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>{storeLabel} · 로케이션 번호를 입력하세요.</p></section>
-      <form className="location-search" onSubmit={submit}>
+      <form className={`location-search ${selected ? 'has-reset' : ''}`} onSubmit={submit}>
         <div className="search-input"><Search /><input ref={inputRef} autoFocus inputMode="numeric" value={query} onChange={(event) => setQuery(event.target.value.replace(/[^0-9A-Za-z가-힣-]/g, ''))} placeholder={shortSearch ? '예: 128' : '예: 1128'} /></div>
-        <button className="primary-button">위치 보기</button>
+        <div className={`search-actions ${selected ? 'has-reset' : ''}`}>
+          <button className="primary-button">위치 보기</button>
+          {selected && <button type="button" className="search-reset-button" onClick={resetSearch}><ArrowLeft />다른 위치 찾기</button>}
+        </div>
       </form>
       {error && <p className="form-error result-error">{error}</p>}
       {group && <section className={`result-card ${selected ? '' : 'overview'}`}>
         <div className="result-title"><span><Check /></span><div><p>{selected ? '검색 결과' : '창고 배치'}</p><h2>{selected ? title : '전체 배치'}</h2><small>{selected?.box ? `${group.name} · 실제 로케이션 박스` : selected ? `${group.name} · Grid (${selected.x}, ${selected.y})` : `${group.name} · 로케이션을 검색하면 핀으로 표시됩니다.`}</small></div></div>
         <GridMap group={group} selected={selected} locations={data.locations} />
         <div className="result-guide"><LocateFixed /><p><strong>{selected ? '표시된 위치부터 찾아보세요.' : '전체 배치를 먼저 확인하세요.'}</strong><span>{selected?.box ? '빨간 핀과 노란 칸이 찾는 로케이션입니다.' : selected ? '빨간 핀과 강조된 칸이 찾는 위치입니다.' : shortSearch ? '위 검색창에 로케이션 번호를 입력하세요. 예: 128' : '위 검색창에 층과 로케이션 번호를 입력하세요. 예: 1128'}</span></p></div>
-        {selected && <button className="secondary-button" onClick={() => { setQuery(''); setSelected(null); setError(''); setTimeout(() => inputRef.current?.focus(), 0) }}><ArrowLeft />다른 로케이션 찾기</button>}
       </section>}
     </div>
   </main>
