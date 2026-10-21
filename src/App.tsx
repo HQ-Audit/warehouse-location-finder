@@ -51,7 +51,7 @@ function objectStyle(object: SpaceObject, bounds: Bounds) {
   return {
     left: `${((x - bounds.minX + .5) / bounds.cols) * 100}%`,
     top: `${((y - bounds.minY + .5) / bounds.rows) * 100}%`,
-    transform: `translate(-50%, -50%) scale(${object.s || 1})`,
+    transform: `translate(-50%, -50%) rotate(${object.r || 0}deg) scale(${object.s || 1})`,
   }
 }
 
@@ -67,7 +67,7 @@ function gridBounds(group: GridGroup): Bounds {
   return { minX, minY, maxX, maxY, cols: maxX - minX + 1, rows: maxY - minY + 1 }
 }
 
-type AlignedBox = { item: LocationEntry; x: number; y: number; width: number; height: number }
+type AlignedBox = { item: LocationEntry; x: number; y: number; width: number; height: number; rotation: number }
 
 function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): AlignedBox[] {
   const ar = Math.max(.1, Number(aspectRatio || 1))
@@ -83,7 +83,17 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
       const next = points[(index + 1) % points.length]
       twiceArea += point[0] * next[1] - next[0] * point[1]
     })
-    return [{ item, center, side: Math.sqrt(Math.abs(twiceArea) / 2 / ar) }]
+    const edges = points.map((point, index) => {
+      const next = points[(index + 1) % points.length]
+      const dx = next[0] - point[0]
+      const dy = next[1] - point[1]
+      return { length: Math.hypot(dx * ar, dy), dx, dy }
+    })
+    const longest = edges.reduce((best, value) => value.length > best.length ? value : best, edges[0] || { length: 0, dx: 1, dy: 0 })
+    const base = item.o === 'v' ? 90 : 0
+    let rotation = Math.atan2(longest.dy, longest.dx) * 180 / Math.PI - base
+    rotation = ((rotation + 90) % 180 + 180) % 180 - 90
+    return [{ item, center, side: Math.sqrt(Math.abs(twiceArea) / 2 / ar), rotation }]
   })
   const sides = values.map((value) => value.side).filter((value) => Number.isFinite(value) && value > .001).sort((a, b) => a - b)
   const median = sides.length ? sides[Math.floor(sides.length / 2)] : .018
@@ -120,6 +130,7 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
       y: Math.min(1 - boxHeight / 2, Math.max(boxHeight / 2, value.center[1])),
       width,
       height: boxHeight,
+      rotation: value.rotation,
     }
   })
 }
@@ -154,7 +165,7 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
       })}
     </div>
     {locationBoxes.length > 0 && <svg className="box-map" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="실제 로케이션 박스 지도">
-      {alignedBoxes.map((value) => <rect key={value.item.id} x={(value.x - value.width / 2) * 1000} y={(value.y - value.height / 2) * 1000} width={value.width * 1000} height={value.height * 1000} rx="3" className={`location-box ${value.item.id === selected?.id ? 'active' : ''}`} />)}
+      {alignedBoxes.map((value) => <g key={value.item.id} transform={`rotate(${value.rotation} ${value.x * 1000} ${value.y * 1000})`}><rect x={(value.x - value.width / 2) * 1000} y={(value.y - value.height / 2) * 1000} width={value.width * 1000} height={value.height * 1000} rx="3" className={`location-box ${value.item.id === selected?.id ? 'active' : ''}`} /></g>)}
     </svg>}
     <svg className="shape-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
       <path d={`${outline} ${holes}`} fillRule="evenodd" />
