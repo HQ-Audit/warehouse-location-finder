@@ -131,9 +131,8 @@ function regionPath(points?: [number, number][]) {
 
 function ObjectBadge({ object, bounds }: { object: SpaceObject; bounds: Bounds }) {
   const code = object.c
-  const direction = code.startsWith('ENT_') ? code.slice(4) : ''
-  const rotation = direction === 'RIGHT' ? 90 : direction === 'DOWN' ? 180 : direction === 'LEFT' ? 270 : 0
-  if (direction) return <span className="space-object entrance" style={objectStyle(object, bounds)} title="입구"><ArrowRight style={{ transform: `rotate(${rotation - 90}deg)` }} /></span>
+  const door = code === 'DOOR' || code.startsWith('ENT_')
+  if (door) return <span className="space-object label door" style={objectStyle(object, bounds)} title="출입구">DOOR</span>
   if (code === 'COL') return <span className="space-object column" style={objectStyle(object, bounds)} title="기둥" />
   return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code}</span>
 }
