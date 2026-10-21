@@ -1,10 +1,74 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, LocateFixed, LogOut, MapPin, Search, Warehouse } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Download, LocateFixed, LogOut, MapPin, Search, Share, Warehouse, X } from 'lucide-react'
 import { findLocation, loadStoreData } from './data'
 import type { GridGroup, LocationEntry, SpaceObject, WebData } from './types'
 
 function Brand() {
   return <div className="brand"><span className="brand-mark"><img src="./abc-mart-black.svg" alt="" /></span><span>창고 로케이션 찾기</span></div>
+}
+
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
+function isStandalone() {
+  const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean }
+  return window.matchMedia('(display-mode: standalone)').matches || navigatorWithStandalone.standalone === true
+}
+
+function InstallAppButton() {
+  const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null)
+  const [installed, setInstalled] = useState(isStandalone)
+  const [showGuide, setShowGuide] = useState(false)
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent)
+
+  useEffect(() => {
+    const onBeforeInstall = (event: Event) => {
+      event.preventDefault()
+      setPromptEvent(event as InstallPromptEvent)
+    }
+    const onInstalled = () => {
+      setInstalled(true)
+      setPromptEvent(null)
+      setShowGuide(false)
+    }
+    window.addEventListener('beforeinstallprompt', onBeforeInstall)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [])
+
+  if (installed) return null
+
+  const install = async () => {
+    if (promptEvent) {
+      await promptEvent.prompt()
+      const choice = await promptEvent.userChoice
+      if (choice.outcome === 'accepted') setInstalled(true)
+      setPromptEvent(null)
+      return
+    }
+    setShowGuide(true)
+  }
+
+  return <>
+    <button className="install-app-button" type="button" onClick={install} aria-label="홈 화면에 앱처럼 추가">
+      <Download size={15} /><span>앱처럼 쓰기</span>
+    </button>
+    {showGuide && <div className="install-guide-backdrop" role="presentation" onClick={() => setShowGuide(false)}>
+      <section className="install-guide" role="dialog" aria-modal="true" aria-labelledby="install-guide-title" onClick={(event) => event.stopPropagation()}>
+        <button className="install-guide-close" type="button" onClick={() => setShowGuide(false)} aria-label="닫기"><X /></button>
+        <img src="./abc-mart-black.svg" alt="ABC-MART" />
+        <h2 id="install-guide-title">홈 화면에 추가하기</h2>
+        {isIos ? <p><Share />Safari 아래의 <strong>공유</strong>를 누른 뒤<br /><strong>홈 화면에 추가</strong>를 선택하세요.</p>
+          : <p>브라우저 메뉴의 <strong>앱 설치</strong> 또는<br /><strong>홈 화면에 추가</strong>를 선택하세요.</p>}
+        <small>추가하면 기존 ABC-MART 아이콘으로 바로 실행할 수 있습니다.</small>
+      </section>
+    </div>}
+  </>
 }
 
 function StoreAccess({ onAccess }: { onAccess: (data: WebData) => void }) {
@@ -206,7 +270,7 @@ function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () =
   }
   const title = selected ? `${selected.w.toUpperCase() === 'B' ? '창고' : selected.w} ${floors.length > 1 && selected.f ? `${floorLabel(String(selected.f))} ` : ''}${selected.no}` : ''
   return <main className="finder-page">
-    <header><Brand />{showStoreChange && <button onClick={onExit}><LogOut size={17} />매장 변경</button>}</header>
+    <header><Brand /><div className="header-actions"><InstallAppButton />{showStoreChange && <button className="store-change-button" onClick={onExit}><LogOut size={17} />매장 변경</button>}</div></header>
     <div className="finder-content">
       <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>{storeLabel} · 로케이션 번호를 입력하세요.</p></section>
       {showFloors && <nav className="floor-tabs" aria-label="창고 층 선택">{floors.map((floor) => <button type="button" key={floor} className={floor === selectedFloor ? 'active' : ''} onClick={() => { setSelectedFloor(floor); setSelected(null); setQuery(''); setError('') }}>{floorLabel(floor)}</button>)}</nav>}
@@ -230,18 +294,33 @@ function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () =
 export default function App() {
   const [data, setData] = useState<WebData | null>(null)
   const [directLoading, setDirectLoading] = useState(false)
-  const directStoreCode = useMemo(() => new URLSearchParams(window.location.search).get('store')?.trim() || '', [])
+  const directStoreCode = useMemo(() => {
+    const queryStore = new URLSearchParams(window.location.search).get('store')?.trim() || ''
+    if (/^\d{4}$/.test(queryStore)) {
+      localStorage.setItem('warehouse-location:last-store', queryStore)
+      return queryStore
+    }
+    if (isStandalone()) return localStorage.getItem('warehouse-location:last-store')?.trim() || ''
+    return ''
+  }, [])
+
+  const acceptData = (value: WebData) => {
+    setData(value)
+    if (/^\d{4}$/.test(String(value.store))) {
+      localStorage.setItem('warehouse-location:last-store', String(value.store))
+    }
+  }
 
   useEffect(() => {
     if (!/^\d{4}$/.test(directStoreCode)) return
     setDirectLoading(true)
     loadStoreData(directStoreCode)
-      .then(setData)
+      .then(acceptData)
       .catch(() => setDirectLoading(false))
   }, [directStoreCode])
 
   if (directLoading && !data) {
     return <main className="access-page"><section className="access-panel"><div className="access-card"><Brand /><p className="help">매장 지도를 불러오는 중입니다…</p></div></section></main>
   }
-  return data ? <Finder data={data} onExit={() => setData(null)} showStoreChange={!/^\d{4}$/.test(directStoreCode)} /> : <StoreAccess onAccess={setData} />
+  return data ? <Finder data={data} onExit={() => setData(null)} showStoreChange={!/^\d{4}$/.test(directStoreCode)} /> : <StoreAccess onAccess={acceptData} />
 }

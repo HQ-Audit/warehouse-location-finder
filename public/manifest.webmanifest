@@ -1,0 +1,23 @@
+{
+  "name": "ABC-MART 창고 로케이션 찾기",
+  "short_name": "로케이션 찾기",
+  "description": "매장 창고 로케이션을 빠르게 찾는 모바일 안내",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef5ff",
+  "theme_color": "#eef5ff",
+  "icons": [
+    {
+      "src": "./app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
