@@ -23,8 +23,10 @@ export async function loadStoreData(storeCode: string): Promise<WebData> {
   return data
 }
 
-export function findLocation(data: WebData, query: string) {
+export function findLocation(data: WebData, query: string, floor?: string) {
   const key = normalize(query)
   if (!key) return undefined
-  return data.locations.find((location) => location.k.includes(key) || normalize(location.id) === key)
+  return data.locations.find((location) =>
+    (!floor || String(location.f) === floor) &&
+    (location.k.includes(key) || normalize(location.id) === key))
 }

@@ -168,25 +168,32 @@ function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () =
   const [selected, setSelected] = useState<LocationEntry | null>(null)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const floors = useMemo(() => new Set(data.locations.map((location) => location.f).filter(Boolean)), [data])
+  const floors = useMemo(() => [...new Set(data.locations.map((location) => String(location.f || '')).filter(Boolean))].sort((a, b) => Number(a) - Number(b)), [data])
+  const showFloors = Boolean(data.floor_selector && floors.length > 1)
+  const [selectedFloor, setSelectedFloor] = useState(() => floors.includes(String(data.default_floor || '')) ? String(data.default_floor) : (floors[0] || ''))
+  const floorLabel = (floor: string) => floor === '0' ? '지하 1층' : `${floor}층`
   const storeLabel = data.store_name?.trim() || data.store
-  const shortSearch = floors.size <= 1 || Boolean(data.floor_selector)
-  const group = selected ? data.groups.find((item) => item.id === selected.g) : data.groups[0]
+  const shortSearch = floors.length <= 1 || showFloors
+  const visibleLocations = useMemo(() => showFloors ? data.locations.filter((location) => String(location.f) === selectedFloor) : data.locations, [data, selectedFloor, showFloors])
+  const overviewLocation = visibleLocations[0]
+  const group = selected ? data.groups.find((item) => item.id === selected.g) : data.groups.find((item) => item.id === overviewLocation?.g) || data.groups[0]
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    const found = findLocation(data, query)
+    const found = findLocation(data, query, showFloors ? selectedFloor : undefined) || findLocation(data, query)
     if (!found) { setSelected(null); setError('해당 로케이션을 찾지 못했습니다. 번호를 다시 확인해 주세요.'); return }
+    if (showFloors && found.f) setSelectedFloor(String(found.f))
     setSelected(found); setError('')
   }
   const resetSearch = () => {
     setQuery(''); setSelected(null); setError('')
     setTimeout(() => inputRef.current?.focus(), 0)
   }
-  const title = selected ? `${selected.w.toUpperCase() === 'B' ? '창고' : selected.w} ${floors.size > 1 && selected.f ? `${selected.f}층 ` : ''}${selected.no}` : ''
+  const title = selected ? `${selected.w.toUpperCase() === 'B' ? '창고' : selected.w} ${floors.length > 1 && selected.f ? `${floorLabel(String(selected.f))} ` : ''}${selected.no}` : ''
   return <main className="finder-page">
     <header><Brand />{showStoreChange && <button onClick={onExit}><LogOut size={17} />매장 변경</button>}</header>
     <div className="finder-content">
       <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>{storeLabel} · 로케이션 번호를 입력하세요.</p></section>
+      {showFloors && <nav className="floor-tabs" aria-label="창고 층 선택">{floors.map((floor) => <button type="button" key={floor} className={floor === selectedFloor ? 'active' : ''} onClick={() => { setSelectedFloor(floor); setSelected(null); setQuery(''); setError('') }}>{floorLabel(floor)}</button>)}</nav>}
       <form className={`location-search ${selected ? 'has-reset' : ''}`} onSubmit={submit}>
         <div className="search-input"><Search /><input ref={inputRef} autoFocus inputMode="numeric" value={query} onChange={(event) => setQuery(event.target.value.replace(/[^0-9A-Za-z가-힣-]/g, ''))} placeholder={shortSearch ? '예: 128' : '예: 1128'} /></div>
         <div className={`search-actions ${selected ? 'has-reset' : ''}`}>
@@ -196,8 +203,8 @@ function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () =
       </form>
       {error && <p className="form-error result-error">{error}</p>}
       {group && <section className={`result-card ${selected ? '' : 'overview'}`}>
-        <div className="result-title"><span><Check /></span><div><p>{selected ? '검색 결과' : '창고 배치'}</p><h2>{selected ? title : '전체 배치'}</h2><small>{selected?.box ? `${group.name} · 실제 로케이션 박스` : selected ? `${group.name} · Grid (${selected.x}, ${selected.y})` : `${group.name} · 로케이션을 검색하면 핀으로 표시됩니다.`}</small></div></div>
-        <GridMap group={group} selected={selected} locations={data.locations} />
+        <div className="result-title"><span><Check /></span><div><p>{selected ? '검색 결과' : '창고 배치'}</p><h2>{selected ? title : showFloors ? `${floorLabel(selectedFloor)} 전체 배치` : '전체 배치'}</h2><small>{selected?.box ? `${group.name} · 실제 로케이션 박스` : selected ? `${group.name} · Grid (${selected.x}, ${selected.y})` : `${group.name} · 로케이션을 검색하면 핀으로 표시됩니다.`}</small></div></div>
+        <GridMap group={group} selected={selected} locations={visibleLocations} />
         <div className="result-guide"><LocateFixed /><p><strong>{selected ? '표시된 위치부터 찾아보세요.' : '전체 배치를 먼저 확인하세요.'}</strong><span>{selected?.box ? '빨간 핀과 노란 칸이 찾는 로케이션입니다.' : selected ? '빨간 핀과 강조된 칸이 찾는 위치입니다.' : shortSearch ? '위 검색창에 로케이션 번호를 입력하세요. 예: 128' : '위 검색창에 층과 로케이션 번호를 입력하세요. 예: 1128'}</span></p></div>
       </section>}
     </div>
