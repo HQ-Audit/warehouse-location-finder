@@ -181,9 +181,12 @@ function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () =
   const group = selected ? data.groups.find((item) => item.id === selected.g) : data.groups.find((item) => item.id === overviewLocation?.g) || data.groups[0]
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    const found = findLocation(data, query, showFloors ? selectedFloor : undefined) || findLocation(data, query)
-    if (!found) { setSelected(null); setError('해당 로케이션을 찾지 못했습니다. 번호를 다시 확인해 주세요.'); return }
-    if (showFloors && found.f) setSelectedFloor(String(found.f))
+    const found = findLocation(data, query, showFloors ? selectedFloor : undefined)
+    if (!found) {
+      setSelected(null)
+      setError(showFloors ? `${floorLabel(selectedFloor)}에는 해당 로케이션이 없습니다.` : '해당 로케이션을 찾지 못했습니다. 번호를 다시 확인해 주세요.')
+      return
+    }
     setSelected(found); setError('')
   }
   const resetSearch = () => {
