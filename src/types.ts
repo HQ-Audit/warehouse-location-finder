@@ -20,6 +20,7 @@ export interface GridGroup {
   objects: SpaceObject[]
   outline?: [number, number][]
   voids?: [number, number][][]
+  dividers?: [[number, number], [number, number]][]
 }
 
 export interface LocationEntry {

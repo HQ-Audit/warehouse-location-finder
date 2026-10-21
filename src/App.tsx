@@ -156,7 +156,10 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
     {locationBoxes.length > 0 && <svg className="box-map" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="실제 로케이션 박스 지도">
       {alignedBoxes.map((value) => <rect key={value.item.id} x={(value.x - value.width / 2) * 1000} y={(value.y - value.height / 2) * 1000} width={value.width * 1000} height={value.height * 1000} rx="3" className={`location-box ${value.item.id === selected?.id ? 'active' : ''}`} />)}
     </svg>}
-    <svg className="shape-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><path d={`${outline} ${holes}`} fillRule="evenodd" /></svg>
+    <svg className="shape-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+      <path d={`${outline} ${holes}`} fillRule="evenodd" />
+      {(group.dividers || []).map(([start, end], index) => <line key={`divider-${index}`} className="divider-line" x1={start[0] * 1000} y1={start[1] * 1000} x2={end[0] * 1000} y2={end[1] * 1000} />)}
+    </svg>
     {group.objects.map((object, index) => <ObjectBadge key={`${object.c}-${object.x}-${object.y}-${index}`} object={object} bounds={locationBoxes.length ? fullBounds : bounds} />)}
     {alignedBoxes.filter((value) => value.item.id === selected?.id).map((value) => <span key={`pin-${value.item.id}`} className="location-pin" style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }} aria-label={`찾는 위치 ${value.item.no}`}>📍</span>)}
   </div>
