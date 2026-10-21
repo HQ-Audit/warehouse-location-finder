@@ -134,7 +134,7 @@ function ObjectBadge({ object, bounds }: { object: SpaceObject; bounds: Bounds }
   const door = code === 'DOOR' || code.startsWith('ENT_')
   if (door) return <span className="space-object label door" style={objectStyle(object, bounds)} title="출입구">DOOR</span>
   if (code === 'COL') return <span className="space-object column" style={objectStyle(object, bounds)} title="기둥" />
-  return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code}</span>
+  return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code === 'POS' ? 'COUNTER' : code}</span>
 }
 
 function GridMap({ group, selected, locations }: { group: GridGroup; selected: LocationEntry | null; locations: LocationEntry[] }) {
