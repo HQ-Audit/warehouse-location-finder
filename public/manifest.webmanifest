@@ -1,6 +1,6 @@
 {
-  "name": "ABC-MART 창고 로케이션 찾기",
-  "short_name": "로케이션 찾기",
+  "name": "ABC-MART 창고 로케이션 맵",
+  "short_name": "로케이션 맵",
   "description": "매장 창고 로케이션을 빠르게 찾는 모바일 안내",
   "lang": "ko",
   "scope": "./",

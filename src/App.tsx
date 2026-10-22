@@ -154,10 +154,14 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
       return { length: Math.hypot(dx * ar, dy), dx, dy }
     })
     const longest = edges.reduce((best, value) => value.length > best.length ? value : best, edges[0] || { length: 0, dx: 1, dy: 0 })
-    const base = item.o === 'v' ? 90 : 0
+    // Use the polygon's actual long edge for display orientation. A box can
+    // have legacy h/v metadata that no longer matches its manually rotated
+    // points; following that metadata makes vertical rows appear horizontal.
+    const vertical = Math.abs(longest.dy) > Math.abs(longest.dx * ar)
+    const base = vertical ? 90 : 0
     let rotation = Math.atan2(longest.dy, longest.dx) * 180 / Math.PI - base
     rotation = ((rotation + 90) % 180 + 180) % 180 - 90
-    return [{ item, center, side: Math.sqrt(Math.abs(twiceArea) / 2 / ar), rotation }]
+    return [{ item, center, side: Math.sqrt(Math.abs(twiceArea) / 2 / ar), rotation, vertical }]
   })
   const sides = values.map((value) => value.side).filter((value) => Number.isFinite(value) && value > .001).sort((a, b) => a - b)
   const median = sides.length ? sides[Math.floor(sides.length / 2)] : .018
@@ -185,7 +189,7 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
   snapCenters(0, snapSide * .55)
   snapCenters(1, snapHeight * .70)
   return values.map((value) => {
-    const vertical = value.item.o === 'v'
+    const vertical = value.vertical
     const width = vertical ? height / ar : side
     const boxHeight = vertical ? side * ar : height
     return {
