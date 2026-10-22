@@ -154,13 +154,17 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
       return { length: Math.hypot(dx * ar, dy), dx, dy }
     })
     const longest = edges.reduce((best, value) => value.length > best.length ? value : best, edges[0] || { length: 0, dx: 1, dy: 0 })
-    // Use the polygon's actual long edge for display orientation. A box can
-    // have legacy h/v metadata that no longer matches its manually rotated
-    // points; following that metadata makes vertical rows appear horizontal.
-    const vertical = Math.abs(longest.dy) > Math.abs(longest.dx * ar)
+    // The editor's explicit h/v type is authoritative. Some WGM files keep
+    // the old axis-aligned polygon after the user changes only the box type,
+    // so deriving orientation from the polygon lays vertical boxes down.
+    const vertical = item.o === 'v'
     const base = vertical ? 90 : 0
     let rotation = Math.atan2(longest.dy, longest.dx) * 180 / Math.PI - base
     rotation = ((rotation + 90) % 180 + 180) % 180 - 90
+    // Keep the residual free-rotation angle within the selected type's axis.
+    // A 90-degree discrepancy is legacy geometry, not a request to swap h/v.
+    if (rotation > 45) rotation -= 90
+    else if (rotation < -45) rotation += 90
     return [{ item, center, side: Math.sqrt(Math.abs(twiceArea) / 2 / ar), rotation, vertical }]
   })
   const sides = values.map((value) => value.side).filter((value) => Number.isFinite(value) && value > .001).sort((a, b) => a - b)
