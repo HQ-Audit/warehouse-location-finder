@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, Download, LocateFixed, LogOut, MapPin, Search, Share, Warehouse, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Download, LocateFixed, MapPin, Search, Share, Warehouse, X } from 'lucide-react'
 import { findLocation, loadStoreData } from './data'
 import type { GridGroup, LocationEntry, SpaceObject, WebData } from './types'
 
@@ -240,7 +240,7 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
   </div>
 }
 
-function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () => void; showStoreChange: boolean }) {
+function Finder({ data }: { data: WebData }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<LocationEntry | null>(null)
   const [error, setError] = useState('')
@@ -270,7 +270,7 @@ function Finder({ data, onExit, showStoreChange }: { data: WebData; onExit: () =
   }
   const title = selected ? `${selected.w.toUpperCase() === 'B' ? '창고' : selected.w} ${floors.length > 1 && selected.f ? `${floorLabel(String(selected.f))} ` : ''}${selected.no}` : ''
   return <main className="finder-page">
-    <header><Brand /><div className="header-actions"><InstallAppButton />{showStoreChange && <button className="store-change-button" onClick={onExit}><LogOut size={17} />매장 변경</button>}</div></header>
+    <header><Brand /><div className="header-actions"><InstallAppButton /></div></header>
     <div className="finder-content">
       <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>{storeLabel} · 로케이션 번호를 입력하세요.</p></section>
       {showFloors && <nav className="floor-tabs" aria-label="창고 층 선택">{floors.map((floor) => <button type="button" key={floor} className={floor === selectedFloor ? 'active' : ''} onClick={() => { setSelectedFloor(floor); setSelected(null); setQuery(''); setError('') }}>{floorLabel(floor)}</button>)}</nav>}
@@ -322,5 +322,5 @@ export default function App() {
   if (directLoading && !data) {
     return <main className="access-page"><section className="access-panel"><div className="access-card"><Brand /><p className="help">매장 지도를 불러오는 중입니다…</p></div></section></main>
   }
-  return data ? <Finder data={data} onExit={() => setData(null)} showStoreChange={!/^\d{4}$/.test(directStoreCode)} /> : <StoreAccess onAccess={acceptData} />
+  return data ? <Finder data={data} /> : <StoreAccess onAccess={acceptData} />
 }
