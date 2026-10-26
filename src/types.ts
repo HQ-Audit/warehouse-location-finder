@@ -19,6 +19,7 @@ export interface GridGroup {
   passages: [number, number][]
   objects: SpaceObject[]
   outline?: [number, number][]
+  outlines?: [number, number][][]
   voids?: [number, number][][]
   dividers?: [[number, number], [number, number]][]
 }

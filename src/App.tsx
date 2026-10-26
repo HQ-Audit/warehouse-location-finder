@@ -226,7 +226,7 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
   const locationBoxes = useMemo(() => locations.filter((item) => item.g === group.id && (!selected || item.f === selected.f) && item.box && item.box.length >= 3), [group.id, locations, selected])
   const alignedBoxes = useMemo(() => alignedLocationBoxes(locationBoxes, Number(group.ar || 1)), [group.ar, locationBoxes])
   const fullBounds: Bounds = { minX: 1, minY: 1, maxX: group.cols || group.n, maxY: group.rows || group.n, cols: group.cols || group.n, rows: group.rows || group.n }
-  const outline = regionPath(group.outline || [[0, 0], [1, 0], [1, 1], [0, 1]])
+  const outlines = (group.outlines || [group.outline || [[0, 0], [1, 0], [1, 1], [0, 1]]]).map(regionPath).join(' ')
   const holes = (group.voids || []).map(regionPath).join(' ')
   return <div className="grid-stage" style={{ aspectRatio: locationBoxes.length ? String(Number(group.ar || 1)) : `${bounds.cols} / ${bounds.rows}` }}>
     <div className="cognitive-grid" style={{ display: locationBoxes.length ? 'none' : 'grid', gridTemplateColumns: `repeat(${bounds.cols}, 1fr)`, gridTemplateRows: `repeat(${bounds.rows}, 1fr)` }}>
@@ -240,7 +240,7 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
       {alignedBoxes.map((value) => <g key={value.item.id} transform={`rotate(${value.rotation} ${value.x * 1000} ${value.y * 1000})`}><rect x={(value.x - value.width / 2) * 1000} y={(value.y - value.height / 2) * 1000} width={value.width * 1000} height={value.height * 1000} rx="3" className={`location-box ${value.item.id === selected?.id ? 'active' : ''}`} /></g>)}
     </svg>}
     <svg className="shape-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-      <path d={`${outline} ${holes}`} fillRule="evenodd" />
+      <path d={`${outlines} ${holes}`} fillRule="evenodd" />
       {(group.dividers || []).map(([start, end], index) => <line key={`divider-${index}`} className="divider-line" x1={start[0] * 1000} y1={start[1] * 1000} x2={end[0] * 1000} y2={end[1] * 1000} />)}
     </svg>
     {group.objects.map((object, index) => <ObjectBadge key={`${object.c}-${object.x}-${object.y}-${index}`} object={object} bounds={locationBoxes.length ? fullBounds : bounds} />)}
