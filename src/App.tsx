@@ -171,8 +171,8 @@ function alignedLocationBoxes(items: LocationEntry[], aspectRatio: number): Alig
   const median = sides.length ? sides[Math.floor(sides.length / 2)] : .018
   const snapSide = Math.max(.013, median * 1.45)
   const snapHeight = Math.max(.007, median * .78) * ar
-  const side = Math.max(.018, median * 1.8)
-  const height = Math.max(.010, median * .98) * ar
+  const side = Math.max(.021, median * 2.15)
+  const height = Math.max(.012, median * 1.18) * ar
   const snapCenters = (axis: 0 | 1, tolerance: number) => {
     const ordered = [...values].sort((a, b) => a.center[axis] - b.center[axis])
     let cluster: typeof values = []
@@ -217,6 +217,7 @@ function ObjectBadge({ object, bounds }: { object: SpaceObject; bounds: Bounds }
   const door = code === 'DOOR' || code.startsWith('ENT_')
   if (door) return <span className="space-object label door" style={objectStyle(object, bounds)} title="출입구">DOOR</span>
   if (code === 'COL') return <span className="space-object column" style={objectStyle(object, bounds)} title="기둥" />
+  if (code === 'FIX') return <span className="space-object fixture" style={objectStyle(object, bounds)} title="집기" />
   return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code === 'POS' ? 'COUNTER' : code}</span>
 }
 
@@ -226,7 +227,7 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
   const locationBoxes = useMemo(() => locations.filter((item) => item.g === group.id && (!selected || item.f === selected.f) && item.box && item.box.length >= 3), [group.id, locations, selected])
   const alignedBoxes = useMemo(() => alignedLocationBoxes(locationBoxes, Number(group.ar || 1)), [group.ar, locationBoxes])
   const fullBounds: Bounds = { minX: 1, minY: 1, maxX: group.cols || group.n, maxY: group.rows || group.n, cols: group.cols || group.n, rows: group.rows || group.n }
-  const outlines = (group.outlines || [group.outline || [[0, 0], [1, 0], [1, 1], [0, 1]]]).map(regionPath).join(' ')
+  const outlineRegions = group.outlines || [group.outline || [[0, 0], [1, 0], [1, 1], [0, 1]]]
   const holes = (group.voids || []).map(regionPath).join(' ')
   return <div className="grid-stage" style={{ aspectRatio: locationBoxes.length ? String(Number(group.ar || 1)) : `${bounds.cols} / ${bounds.rows}` }}>
     <div className="cognitive-grid" style={{ display: locationBoxes.length ? 'none' : 'grid', gridTemplateColumns: `repeat(${bounds.cols}, 1fr)`, gridTemplateRows: `repeat(${bounds.rows}, 1fr)` }}>
@@ -240,7 +241,8 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
       {alignedBoxes.map((value) => <g key={value.item.id} transform={`rotate(${value.rotation} ${value.x * 1000} ${value.y * 1000})`}><rect x={(value.x - value.width / 2) * 1000} y={(value.y - value.height / 2) * 1000} width={value.width * 1000} height={value.height * 1000} rx="3" className={`location-box ${value.item.id === selected?.id ? 'active' : ''}`} /></g>)}
     </svg>}
     <svg className="shape-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-      <path d={`${outlines} ${holes}`} fillRule="evenodd" />
+      <path d={`${regionPath(outlineRegions[0])} ${holes}`} fillRule="evenodd" />
+      {outlineRegions.slice(1).map((region, index) => <path key={`additional-outline-${index}`} className="additional-outline" d={regionPath(region)} />)}
       {(group.dividers || []).map(([start, end], index) => <line key={`divider-${index}`} className="divider-line" x1={start[0] * 1000} y1={start[1] * 1000} x2={end[0] * 1000} y2={end[1] * 1000} />)}
     </svg>
     {group.objects.map((object, index) => <ObjectBadge key={`${object.c}-${object.x}-${object.y}-${index}`} object={object} bounds={locationBoxes.length ? fullBounds : bounds} />)}
@@ -254,20 +256,25 @@ function Finder({ data }: { data: WebData }) {
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const floors = useMemo(() => [...new Set(data.locations.map((location) => String(location.f || '')).filter(Boolean))].sort((a, b) => Number(a) - Number(b)), [data])
+  const categories = useMemo(() => [...new Set(data.locations.map((location) => String(location.w || '').toUpperCase()).filter((value) => value === 'B' || value === 'F'))], [data])
+  const showCategories = categories.includes('B') && categories.includes('F')
   const showFloors = Boolean(data.floor_selector && floors.length > 1)
   const [selectedFloor, setSelectedFloor] = useState(() => floors.includes(String(data.default_floor || '')) ? String(data.default_floor) : (floors[0] || ''))
+  const [selectedCategory, setSelectedCategory] = useState(() => categories.includes('B') ? 'B' : (categories[0] || ''))
   const floorLabel = (floor: string) => floor === '0' ? '지하 1층' : `${floor}층`
+  const categoryLabel = (category: string) => category.toUpperCase() === 'F' ? '매장' : '창고'
   const storeLabel = data.store_name?.trim() || data.store
   const shortSearch = floors.length <= 1 || showFloors
   const visibleLocations = useMemo(() => showFloors ? data.locations.filter((location) => String(location.f) === selectedFloor) : data.locations, [data, selectedFloor, showFloors])
-  const overviewLocation = visibleLocations[0]
+  const overviewLocation = visibleLocations.find((location) => !showCategories || String(location.w).toUpperCase() === selectedCategory) || visibleLocations[0]
   const group = selected ? data.groups.find((item) => item.id === selected.g) : data.groups.find((item) => item.id === overviewLocation?.g) || data.groups[0]
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    const found = findLocation(data, query, showFloors ? selectedFloor : undefined)
+    const found = findLocation(data, query, showFloors ? selectedFloor : undefined, showCategories ? selectedCategory : undefined)
     if (!found) {
       setSelected(null)
-      setError(showFloors ? `${floorLabel(selectedFloor)}에는 해당 로케이션이 없습니다.` : '해당 로케이션을 찾지 못했습니다. 번호를 다시 확인해 주세요.')
+      const scope = [showCategories ? categoryLabel(selectedCategory) : '', showFloors ? floorLabel(selectedFloor) : ''].filter(Boolean).join(' ')
+      setError(scope ? `${scope}에는 해당 로케이션이 없습니다.` : '해당 로케이션을 찾지 못했습니다. 번호를 다시 확인해 주세요.')
       return
     }
     setSelected(found); setError('')
@@ -276,11 +283,12 @@ function Finder({ data }: { data: WebData }) {
     setQuery(''); setSelected(null); setError('')
     setTimeout(() => inputRef.current?.focus(), 0)
   }
-  const title = selected ? `${selected.w.toUpperCase() === 'B' ? '창고' : selected.w} ${floors.length > 1 && selected.f ? `${floorLabel(String(selected.f))} ` : ''}${selected.no}` : ''
+  const title = selected ? `${categoryLabel(selected.w)} ${floors.length > 1 && selected.f ? `${floorLabel(String(selected.f))} ` : ''}${selected.no}` : ''
   return <main className="finder-page">
     <header><Brand /><div className="header-actions"><InstallAppButton /></div></header>
     <div className="finder-content">
       <section className="finder-heading"><p className="eyebrow">LOCATION FINDER</p><h1>로케이션 찾기</h1><p>{storeLabel} · 로케이션 번호를 입력하세요.</p></section>
+      {showCategories && <nav className="scope-tabs category-tabs" aria-label="로케이션 구분 선택">{(['B', 'F'] as const).map((category) => <button type="button" key={category} className={category === selectedCategory ? 'active' : ''} onClick={() => { setSelectedCategory(category); setSelected(null); setQuery(''); setError('') }}>{categoryLabel(category)}</button>)}</nav>}
       {showFloors && <nav className="floor-tabs" aria-label="창고 층 선택">{floors.map((floor) => <button type="button" key={floor} className={floor === selectedFloor ? 'active' : ''} onClick={() => { setSelectedFloor(floor); setSelected(null); setQuery(''); setError('') }}>{floorLabel(floor)}</button>)}</nav>}
       <form className={`location-search ${selected ? 'has-reset' : ''}`} onSubmit={submit}>
         <div className="search-input"><Search /><input ref={inputRef} autoFocus inputMode="numeric" value={query} onChange={(event) => setQuery(event.target.value.replace(/[^0-9A-Za-z가-힣-]/g, ''))} placeholder={shortSearch ? '예: 128' : '예: 1128'} /></div>
@@ -291,7 +299,7 @@ function Finder({ data }: { data: WebData }) {
       </form>
       {error && <p className="form-error result-error">{error}</p>}
       {group && <section className={`result-card ${selected ? '' : 'overview'}`}>
-        <div className="result-title"><span><Check /></span><div><p>{selected ? '검색 결과' : '창고 배치'}</p><h2>{selected ? title : showFloors ? `${floorLabel(selectedFloor)} 전체 배치` : '전체 배치'}</h2><small>{selected?.box ? `${group.name} · 실제 로케이션 박스` : selected ? `${group.name} · Grid (${selected.x}, ${selected.y})` : `${group.name} · 로케이션을 검색하면 핀으로 표시됩니다.`}</small></div></div>
+        <div className="result-title"><span><Check /></span><div><p>{selected ? '검색 결과' : '로케이션 배치'}</p><h2>{selected ? title : `${showCategories ? `${categoryLabel(selectedCategory)} ` : ''}${showFloors ? `${floorLabel(selectedFloor)} ` : ''}전체 배치`}</h2><small>{selected?.box ? `${group.name} · 실제 로케이션 박스` : selected ? `${group.name} · Grid (${selected.x}, ${selected.y})` : `${group.name} · 로케이션을 검색하면 핀으로 표시됩니다.`}</small></div></div>
         <GridMap group={group} selected={selected} locations={visibleLocations} />
         <div className="result-guide"><LocateFixed /><p><strong>{selected ? '표시된 위치부터 찾아보세요.' : '전체 배치를 먼저 확인하세요.'}</strong><span>{selected?.box ? '빨간 핀과 노란 칸이 찾는 로케이션입니다.' : selected ? '빨간 핀과 강조된 칸이 찾는 위치입니다.' : shortSearch ? '위 검색창에 로케이션 번호를 입력하세요. 예: 128' : '위 검색창에 층과 로케이션 번호를 입력하세요. 예: 1128'}</span></p></div>
       </section>}
