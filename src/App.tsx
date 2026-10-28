@@ -218,7 +218,9 @@ function ObjectBadge({ object, bounds }: { object: SpaceObject; bounds: Bounds }
   if (door) return <span className="space-object label door" style={objectStyle(object, bounds)} title="출입구">DOOR</span>
   if (code === 'COL') return <span className="space-object column" style={objectStyle(object, bounds)} title="기둥" />
   if (code === 'FIX') return <span className="space-object fixture" style={objectStyle(object, bounds)} title="집기" />
-  if (code === 'WALL') return <span className="space-object wallcab" style={objectStyle(object, bounds)} title="벽부장" />
+  if (code === 'WALL1') return <span className="space-object wallcab1" style={objectStyle(object, bounds)} title="벽부장 1칸" />
+  if (code === 'WALL2') return <span className="space-object wallcab2" style={objectStyle(object, bounds)} title="벽부장 2칸" />
+  if (code === 'WALL') return <span className="space-object wallcab" style={objectStyle(object, bounds)} title="벽부장 3칸" />
   return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code === 'POS' ? 'COUNTER' : code}</span>
 }
 
