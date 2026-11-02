@@ -324,8 +324,7 @@ export default function App() {
       localStorage.setItem('warehouse-location:last-store', queryStore)
       return queryStore
     }
-    if (isStandalone()) return localStorage.getItem('warehouse-location:last-store')?.trim() || ''
-    return ''
+    return localStorage.getItem('warehouse-location:last-store')?.trim() || ''
   }, [])
 
   const acceptData = (value: WebData) => {
