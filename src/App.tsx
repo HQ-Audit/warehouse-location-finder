@@ -212,24 +212,31 @@ function regionPath(points?: [number, number][]) {
   return `M ${points.map(([x, y]) => `${Number(x) * 1000} ${Number(y) * 1000}`).join(' L ')} Z`
 }
 
-function ObjectBadge({ object, bounds }: { object: SpaceObject; bounds: Bounds }) {
+function ObjectBadge({ object, bounds, modernDoors }: { object: SpaceObject; bounds: Bounds; modernDoors: boolean }) {
   const code = object.c
-  const door = code === 'DOOR' || code.startsWith('ENT_')
-  if (door) return <span className="space-object label door" style={objectStyle(object, bounds)} title="출입구">DOOR</span>
+  const legacyDoor = code === 'DOOR'
+  const iconDoor = code.startsWith('ENT_') || (legacyDoor && modernDoors)
+  if (legacyDoor && !modernDoors) return <span className="space-object label door" style={objectStyle(object, bounds)} title="출입구">DOOR</span>
+  if (iconDoor) return <span className="space-object entranceicon" style={objectStyle(object, bounds)} title="출입구" />
   if (code === 'COL') return <span className="space-object column" style={objectStyle(object, bounds)} title="기둥" />
-  if (code === 'FIX') return <span className="space-object fixture" style={objectStyle(object, bounds)} title="기본 집기" />
-  if (code === 'FIX2') return <span className="space-object fixture2" style={objectStyle(object, bounds)} title="2칸 집기" />
-  if (code === 'FIXS') return <span className="space-object fixtureslim" style={objectStyle(object, bounds)} title="슬림 집기" />
-  if (code === 'FIXT') return <span className="space-object fixturet" style={objectStyle(object, bounds)} title="T형 집기" />
-  if (code === 'FIXX') return <span className="space-object fixturex" style={objectStyle(object, bounds)} title="십자형 집기" />
-  if (code === 'FIXO') return <span className="space-object fixtureoval" style={objectStyle(object, bounds)} title="타원형 집기" />
-  if (code === 'WALL1') return <span className="space-object wallcab1" style={objectStyle(object, bounds)} title="벽부장 1200" />
-  if (code === 'WALL2') return <span className="space-object wallcab2" style={objectStyle(object, bounds)} title="벽부장 2400" />
-  if (code === 'WALL') return <span className="space-object wallcab" style={objectStyle(object, bounds)} title="벽부장 3600" />
-  return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code === 'POS' ? 'COUNTER' : code}</span>
+  if (code === 'POS') return <span className="space-object counter" style={objectStyle(object, bounds)} title="COUNTER"><span className="counter-monitor" /><span className="counter-person" /></span>
+  const pictograms: Record<string, [string, string]> = {
+    FIX: ['fixture', '기본 집기'],
+    FIX2: ['fixture2', '2칸 집기'], FIXS: ['fixtureslim', '슬림 집기'],
+    FIXT: ['fixturet', 'T형 집기'], FIXX: ['fixturex', '십자형 집기'],
+    FIXO: ['fixtureoval', '타원형 집기'], DESK: ['workdesk', '작업대형 집기'],
+    KNTC: ['kntc', 'KNT C형 집기'], GLASS: ['glassunit', '유리 진열대형 집기'],
+    MFP: ['printer', '복합기'], WALL1: ['wallcab1', '벽부장 1200'],
+    RACK2: ['doublehanger', '양면 행거'], HEAD: ['headboard', '헤드보드형 중앙 집기'],
+    TOWER: ['towerunit', '타워형 진열대'],
+    WALL2: ['wallcab2', '벽부장 2400'], WALL: ['wallcab', '벽부장 3600'],
+  }
+  const pictogram = pictograms[code]
+  if (pictogram) return <span className={`space-object ${pictogram[0]}`} style={objectStyle(object, bounds)} title={pictogram[1]} />
+  return <span className={`space-object label ${code.toLowerCase()}`} style={objectStyle(object, bounds)}>{code}</span>
 }
 
-function GridMap({ group, selected, locations }: { group: GridGroup; selected: LocationEntry | null; locations: LocationEntry[] }) {
+function GridMap({ group, selected, locations, modernDoors }: { group: GridGroup; selected: LocationEntry | null; locations: LocationEntry[]; modernDoors: boolean }) {
   const bounds = useMemo(() => gridBounds(group), [group])
   const passages = useMemo(() => new Set(group.passages.map(([x, y]) => `${x},${y}`)), [group])
   const locationBoxes = useMemo(() => locations.filter((item) => item.g === group.id && (!selected || item.f === selected.f) && item.box && item.box.length >= 3), [group.id, locations, selected])
@@ -253,7 +260,7 @@ function GridMap({ group, selected, locations }: { group: GridGroup; selected: L
       {outlineRegions.slice(1).map((region, index) => <path key={`additional-outline-${index}`} className="additional-outline" d={regionPath(region)} />)}
       {(group.dividers || []).map(([start, end], index) => <line key={`divider-${index}`} className="divider-line" x1={start[0] * 1000} y1={start[1] * 1000} x2={end[0] * 1000} y2={end[1] * 1000} />)}
     </svg>
-    {group.objects.map((object, index) => <ObjectBadge key={`${object.c}-${object.x}-${object.y}-${index}`} object={object} bounds={locationBoxes.length ? fullBounds : bounds} />)}
+    {group.objects.map((object, index) => <ObjectBadge key={`${object.c}-${object.x}-${object.y}-${index}`} object={object} bounds={locationBoxes.length ? fullBounds : bounds} modernDoors={modernDoors} />)}
     {alignedBoxes.filter((value) => value.item.id === selected?.id).map((value) => <span key={`pin-${value.item.id}`} className="location-pin" style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }} aria-label={`찾는 위치 ${value.item.no}`}>📍</span>)}
   </div>
 }
@@ -267,6 +274,7 @@ function Finder({ data }: { data: WebData }) {
   const categories = useMemo(() => [...new Set(data.locations.map((location) => String(location.w || '').toUpperCase()).filter((value) => value === 'B' || value === 'F'))], [data])
   const showCategories = categories.includes('B') && categories.includes('F')
   const showFloors = Boolean(data.floor_selector && floors.length > 1)
+  const modernDoors = String(data.generated || '').slice(0, 10) >= '2026-11-19'
   const [selectedFloor, setSelectedFloor] = useState(() => floors.includes(String(data.default_floor || '')) ? String(data.default_floor) : (floors[0] || ''))
   const [selectedCategory, setSelectedCategory] = useState(() => categories.includes('B') ? 'B' : (categories[0] || ''))
   const floorLabel = (floor: string) => floor === '0' ? '지하 1층' : `${floor}층`
@@ -308,7 +316,7 @@ function Finder({ data }: { data: WebData }) {
       {error && <p className="form-error result-error">{error}</p>}
       {group && <section className={`result-card ${selected ? '' : 'overview'}`}>
         <div className="result-title"><span><Check /></span><div><p>{selected ? '검색 결과' : '로케이션 배치'}</p><h2>{selected ? title : `${showCategories ? `${categoryLabel(selectedCategory)} ` : ''}${showFloors ? `${floorLabel(selectedFloor)} ` : ''}전체 배치`}</h2><small>{selected?.box ? `${group.name} · 실제 로케이션 박스` : selected ? `${group.name} · Grid (${selected.x}, ${selected.y})` : `${group.name} · 로케이션을 검색하면 핀으로 표시됩니다.`}</small></div></div>
-        <GridMap group={group} selected={selected} locations={visibleLocations} />
+        <GridMap group={group} selected={selected} locations={visibleLocations} modernDoors={modernDoors} />
         <div className="result-guide"><LocateFixed /><p><strong>{selected ? '표시된 위치부터 찾아보세요.' : '전체 배치를 먼저 확인하세요.'}</strong><span>{selected?.box ? '빨간 핀과 노란 칸이 찾는 로케이션입니다.' : selected ? '빨간 핀과 강조된 칸이 찾는 위치입니다.' : shortSearch ? '위 검색창에 로케이션 번호를 입력하세요. 예: 128' : '위 검색창에 층과 로케이션 번호를 입력하세요. 예: 1128'}</span></p></div>
       </section>}
     </div>
